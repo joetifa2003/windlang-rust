@@ -94,6 +94,7 @@ impl Parser {
             TokenType::LBrace => self.parse_block_stmt(),
             TokenType::If => self.parse_if_stmt(),
             TokenType::Echo => self.parse_echo_stmt(),
+            TokenType::For => self.parse_for_stmt(),
             _ => self.parse_expression_statement(),
         }
     }
@@ -112,6 +113,29 @@ impl Parser {
 
         Ok(Box::new(AstNode::new(
             AstNodeType::BlockStmt { statements },
+            line,
+        )))
+    }
+
+    fn parse_for_stmt(&mut self) -> Result<Box<AstNode>, ParseError> {
+        let line = self.current_token().line;
+        self.next_token(); // for
+
+        self.expect_current(TokenType::LParen)?;
+        let initializer = self.parse_statement()?;
+        let condition = self.parse_expression(Precedence::Lowest)?;
+        self.expect_current(TokenType::SemiColon)?;
+        let increment = self.parse_statement()?;
+        self.expect_current(TokenType::RParen)?;
+        let body = self.parse_statement()?;
+
+        Ok(Box::new(AstNode::new(
+            AstNodeType::ForStmt {
+                initializer,
+                condition,
+                body,
+                increment,
+            },
             line,
         )))
     }

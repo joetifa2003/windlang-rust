@@ -41,6 +41,12 @@ pub enum AstNodeType {
     ReturnStmt {
         value: Box<AstNode>,
     },
+    ForStmt {
+        initializer: Box<AstNode>,
+        condition: Box<AstNode>,
+        body: Box<AstNode>,
+        increment: Box<AstNode>,
+    },
 
     // Expressions
     IntegerExpr {

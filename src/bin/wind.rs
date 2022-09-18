@@ -40,10 +40,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             let mut compiler = Compiler::new();
             let opcode = value_or_exit(compiler.compile_stmts(ast));
-            // for op in &opcode {
-            //     println!("{}", op);
-            // }
-            // println!("========================");
+            for op in &opcode {
+                println!("{}", op);
+            }
+            println!("========================");
 
             let mut vm = VM::new(opcode);
             value_or_exit(vm.interpret());

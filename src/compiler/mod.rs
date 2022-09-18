@@ -346,6 +346,36 @@ impl Compiler {
 
                 Ok(instructions)
             }
+            AstNodeType::ForStmt {
+                initializer,
+                condition,
+                body,
+                increment,
+            } => {
+                let mut instructions = vec![];
+
+                self.begin_scope();
+                let mut initializer_instructions = self.compile(*initializer)?;
+                let mut condition_instructions = self.compile(*condition)?;
+                let mut body_instructions = self.compile(*body)?;
+                let mut increment_instructions = self.compile(*increment)?;
+                let scope = self.end_scope();
+
+                let condition_len = condition_instructions.len() as i32;
+                let body_len = body_instructions.len() as i32;
+                let increment_len = increment_instructions.len() as i32;
+
+                instructions.push(Opcode::Block(scope.len()));
+                instructions.append(&mut initializer_instructions);
+                instructions.append(&mut condition_instructions);
+                instructions.push(Opcode::JmpFalse(body_len + increment_len + 2));
+                instructions.append(&mut body_instructions);
+                instructions.append(&mut increment_instructions);
+                instructions.push(Opcode::Jmp(-increment_len - body_len - condition_len - 1));
+                instructions.push(Opcode::EndBlock);
+
+                Ok(instructions)
+            }
         }
     }
 }
