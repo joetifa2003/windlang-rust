@@ -32,7 +32,7 @@ pub enum AstNodeType {
     },
     WhileStmt {
         condition: Box<AstNode>,
-        statements: Box<AstNode>,
+        body: Box<AstNode>,
     },
     LetStmt {
         name: String, // Identifier
@@ -77,10 +77,18 @@ pub enum AstNodeType {
     },
     FunctionExpr {
         body: Box<AstNode>,
+        params: Vec<String>,
     },
     AssignExpr {
         name: String,
         value: Box<AstNode>,
+    },
+    Echo {
+        value: Box<AstNode>,
+    },
+    Call {
+        func: Box<AstNode>,
+        args: Vec<AstNode>,
     },
 }
 

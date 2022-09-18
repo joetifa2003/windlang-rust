@@ -78,18 +78,6 @@ impl Parser {
         Ok(())
     }
 
-    fn expect_peak(&mut self, tt: TokenType) -> Result<(), ParseError> {
-        if !self.peek_token_is(tt) {
-            return Err(ParseError::new(
-                ParseErrorKind::UnexpectedToken,
-                format!("unexpected token {}", self.current_token().literal),
-            ));
-        }
-
-        self.next_token();
-        Ok(())
-    }
-
     fn current_token_is(&self, tt: TokenType) -> bool {
         self.current_token().tt == tt
     }
@@ -105,6 +93,7 @@ impl Parser {
             TokenType::Return => self.parse_return(),
             TokenType::LBrace => self.parse_block_stmt(),
             TokenType::If => self.parse_if_stmt(),
+            TokenType::Echo => self.parse_echo_stmt(),
             _ => self.parse_expression_statement(),
         }
     }
@@ -143,7 +132,7 @@ impl Parser {
             line,
             node_type: AstNodeType::WhileStmt {
                 condition: expr,
-                statements: stmt,
+                body: stmt,
             },
         }))
     }
@@ -174,6 +163,8 @@ impl Parser {
 
         let expr = self.parse_expression(Precedence::Lowest)?;
 
+        self.expect_current(TokenType::SemiColon)?;
+
         Ok(Box::new(AstNode::new(
             AstNodeType::ReturnStmt { value: expr },
             line,
@@ -188,6 +179,10 @@ impl Parser {
             AstNodeType::ExpressionStmt { expression: expr },
             expr_stmt_line,
         );
+
+        if self.current_token_is(TokenType::SemiColon) {
+            self.next_token();
+        }
 
         Ok(Box::new(expr_stmt))
     }
@@ -301,6 +296,29 @@ impl Parser {
         )))
     }
 
+    fn parse_call(parser: &mut Parser, left: Box<AstNode>) -> Result<Box<AstNode>, ParseError> {
+        let line = parser.current_token().line;
+        let mut args = vec![];
+
+        parser.next_token(); // (
+        if !parser.current_token_is(TokenType::RParen) {
+            while parser.peek_token_is(TokenType::Comma) {
+                let arg = parser.parse_expression(Precedence::Lowest)?;
+                args.push(*arg);
+                parser.next_token(); // ,
+            }
+
+            let last_param = parser.parse_expression(Precedence::Lowest)?;
+            args.push(*last_param);
+        }
+        parser.expect_current(TokenType::RParen)?;
+
+        Ok(Box::new(AstNode {
+            line,
+            node_type: AstNodeType::Call { func: left, args },
+        }))
+    }
+
     fn parse_if_stmt(&mut self) -> Result<Box<AstNode>, ParseError> {
         let line = self.current_token().line;
         self.next_token(); // if keyword
@@ -330,6 +348,20 @@ impl Parser {
         )))
     }
 
+    fn parse_echo_stmt(&mut self) -> Result<Box<AstNode>, ParseError> {
+        let line = self.current_token().line;
+        self.next_token(); // echo
+
+        let value = self.parse_expression(Precedence::Lowest)?;
+
+        self.expect_current(TokenType::SemiColon)?;
+
+        Ok(Box::new(AstNode {
+            line,
+            node_type: AstNodeType::Echo { value },
+        }))
+    }
+
     fn parse_prefix(parser: &mut Parser) -> Result<Box<AstNode>, ParseError> {
         let line = parser.current_token().line;
         let operator = parser.current_token().literal.clone();
@@ -352,11 +384,13 @@ impl Parser {
         parser.next_token(); // [
 
         let mut expressions = vec![];
-        expressions.push(parser.parse_expression(Precedence::Lowest)?);
-
-        while parser.current_token_is(TokenType::Comma) {
-            parser.next_token(); // ,
+        if !parser.current_token_is(TokenType::RBracket) {
             expressions.push(parser.parse_expression(Precedence::Lowest)?);
+
+            while parser.current_token_is(TokenType::Comma) {
+                parser.next_token(); // ,
+                expressions.push(parser.parse_expression(Precedence::Lowest)?);
+            }
         }
 
         parser.expect_current(TokenType::RBracket)?;
@@ -371,15 +405,29 @@ impl Parser {
 
     fn parse_fn(parser: &mut Parser) -> Result<Box<AstNode>, ParseError> {
         let line = parser.current_token().line;
+        let mut params = vec![];
 
         parser.next_token(); // fn
         parser.expect_current(TokenType::LParen)?;
+        if !parser.current_token_is(TokenType::RParen) {
+            while parser.peek_token_is(TokenType::Comma) {
+                let param = parser.current_token().literal.clone();
+                parser.expect_current(TokenType::Ident)?;
+                params.push(param);
+                parser.next_token(); // ,
+            }
+
+            let last_param = parser.current_token().literal.clone();
+            parser.expect_current(TokenType::Ident)?;
+            params.push(last_param);
+        }
+
         parser.expect_current(TokenType::RParen)?;
 
-        let body = parser.parse_statement()?;
+        let body = parser.parse_block_stmt()?;
 
         Ok(Box::new(AstNode::new(
-            AstNodeType::FunctionExpr { body },
+            AstNodeType::FunctionExpr { body, params },
             line,
         )))
     }
@@ -419,6 +467,7 @@ impl Parser {
             | TokenType::Or => Some(Box::new(Parser::parse_infix)),
 
             TokenType::Assign => Some(Box::new(Parser::parse_assign)),
+            TokenType::LParen => Some(Box::new(Parser::parse_call)),
 
             _ => None,
         }
@@ -443,7 +492,7 @@ impl Parser {
             TokenType::PlusPlus | TokenType::MinusMinus => Ok(Precedence::Postfix),
             TokenType::And => Ok(Precedence::And),
             TokenType::Or => Ok(Precedence::Or),
-            TokenType::LParen | TokenType::RParen | TokenType::Dot => Ok(Precedence::Highest),
+            TokenType::LParen | TokenType::Dot => Ok(Precedence::Highest),
 
             _ => Ok(Precedence::Lowest),
         }
@@ -455,7 +504,7 @@ impl Parser {
 
         while !self.current_token_is(TokenType::SemiColon)
             && !self.current_token_is(TokenType::Eof)
-            && self.current_precedence()? >= precedence
+            && self.current_precedence()? > precedence
         {
             if let Some(infix) = self.get_infix_parse_fn() {
                 left_expr = infix(self, left_expr)?;

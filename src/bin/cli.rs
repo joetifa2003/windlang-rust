@@ -1,47 +1,64 @@
-use std::{error::Error, fs};
-
-use windlang_rust::{
-    compiler::Compiler,
-    interpreter::{env::Env, Interpreter},
-    lexer::Lexer,
-    parser::Parser,
-    vm::{opcode::Opcode, value::Value, VM},
+use std::{
+    error::Error,
+    fs::{self},
+    process,
 };
 
-macro_rules! value_or_exit {
-    ($x:expr) => {
-        match $x {
-            Ok(value) => value,
-            Err(err) => {
-                println!("{}", err);
-                ::std::process::exit(1);
-            }
-        }
-    };
+use clap::{Parser, Subcommand};
+use mimalloc::MiMalloc;
+use windlang_rust::{compiler::Compiler, lexer::Lexer, parser, vm::VM};
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
+#[derive(Parser)]
+#[clap(author="joetifa2003", version="0.1.0", about, long_about = None)]
+#[clap(propagate_version = true)]
+struct Cli {
+    #[clap(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Runs a wind script using the VM
+    Run { file_name: String },
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let code = fs::read_to_string("main.wind")?.parse()?;
+    let cli = Cli::parse();
 
-    let mut lexer = Lexer::new(code);
-    let tokens = value_or_exit!(lexer.lex());
+    match cli.command {
+        Commands::Run { file_name } => {
+            let code = value_or_exit(fs::read_to_string(file_name));
 
-    let mut parser = Parser::new(tokens);
-    let ast = value_or_exit!(parser.parse_program());
+            let mut lexer = Lexer::new(code);
+            let tokens = value_or_exit(lexer.lex());
 
-    // let interpreter = Interpreter::new();
-    // let env = Env::new();
-    // let out = value_or_exit!(interpreter.eval_program(ast, env));
+            let mut parser = parser::Parser::new(tokens);
+            let ast = value_or_exit(parser.parse_program());
 
-    // println!("{:?}", out);
+            let mut compiler = Compiler::new();
+            let opcode = value_or_exit(compiler.compile_stmts(ast));
+            // for op in &opcode {
+            //     println!("{}", op);
+            // }
+            // println!("========================");
 
-    let mut compiler = Compiler::new();
-    let opcode = compiler.compile(ast);
-    dbg!(&opcode);
-
-    let mut vm = VM::new();
-    vm.interpret(opcode);
-    dbg!(&vm.stack);
+            let mut vm = VM::new(opcode);
+            value_or_exit(vm.interpret());
+        }
+    }
 
     Ok(())
+}
+
+fn value_or_exit<T, E: Error>(input: Result<T, E>) -> T {
+    match input {
+        Ok(val) => val,
+        Err(err) => {
+            eprintln!("{}", err);
+            process::exit(1)
+        }
+    }
 }

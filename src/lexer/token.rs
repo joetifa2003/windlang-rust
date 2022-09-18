@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TokenType {
     Eof,
 
@@ -54,6 +54,8 @@ pub enum TokenType {
     As,
     Break,
     Continue,
+
+    Echo,
 }
 
 #[derive(Debug, Clone)]

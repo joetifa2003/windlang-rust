@@ -33,7 +33,7 @@ impl Interpreter {
         Ok(value)
     }
 
-    fn eval(&self, node: &Box<AstNode>, env: &mut Rc<RefCell<Env>>) -> Result<Value, RuntimeError> {
+    fn eval(&self, node: &AstNode, env: &mut Rc<RefCell<Env>>) -> Result<Value, RuntimeError> {
         match &node.node_type {
             AstNodeType::ExpressionStmt { expression } => self.eval(expression, env),
             AstNodeType::FloatExpr { value } => Ok(Value::FLOAT(*value)),
@@ -51,7 +51,7 @@ impl Interpreter {
             }
             AstNodeType::WhileStmt {
                 condition,
-                statements,
+                body: statements,
             } => {
                 while Self::is_truthy(&self.eval(condition, env)?) {
                     self.eval(statements, env)?;
@@ -139,12 +139,15 @@ impl Interpreter {
 
                 Ok(Value::ARRAY(evaluated_values))
             }
-            AstNodeType::FunctionExpr { body: _ } => todo!(),
+
             AstNodeType::AssignExpr { name, value } => {
                 let evaluated_value = self.eval(value, env)?;
 
                 env.borrow_mut().assign(name, evaluated_value)
             }
+            AstNodeType::Echo { value } => todo!(),
+            AstNodeType::Call { func, args } => todo!(),
+            AstNodeType::FunctionExpr { body, params } => todo!(),
         }
     }
 

@@ -123,11 +123,7 @@ impl Lexer {
                 } else {
                     return Err(LexerError::new(
                         LexerErrorKind::IllegalToken,
-                        format!(
-                            "illegal token {}{}",
-                            self.current_char.to_string(),
-                            self.peak_char().to_string()
-                        ),
+                        format!("illegal token {}{}", self.current_char, self.peak_char()),
                     ));
                 }
             }
@@ -138,11 +134,7 @@ impl Lexer {
                 } else {
                     return Err(LexerError::new(
                         LexerErrorKind::IllegalToken,
-                        format!(
-                            "illegal token {}{}",
-                            self.current_char.to_string(),
-                            self.peak_char().to_string()
-                        ),
+                        format!("illegal token {}{}", self.current_char, self.peak_char()),
                     ));
                 }
             }
@@ -205,12 +197,12 @@ impl Lexer {
             _ => {
                 if self.current_char.is_alphabetic() {
                     return Ok(self.read_identifier());
-                } else if self.current_char.is_digit(10) {
+                } else if self.current_char.is_ascii_digit() {
                     return Ok(self.read_number());
                 } else {
                     return Err(LexerError::new(
                         LexerErrorKind::IllegalToken,
-                        format!("illegal token {}", self.current_char.to_string(),),
+                        format!("illegal token {}", self.current_char),
                     ));
                 }
             }
@@ -264,6 +256,7 @@ impl Lexer {
             "as" => TokenType::As,
             "break" => TokenType::Break,
             "continue" => TokenType::Continue,
+            "echo" => TokenType::Echo,
             _ => TokenType::Ident,
         }
     }
@@ -273,7 +266,7 @@ impl Lexer {
         let mut literal = String::new();
         let mut token_type = TokenType::Int;
 
-        while self.current_char.is_digit(10) || self.current_char == '.' {
+        while self.current_char.is_ascii_digit() || self.current_char == '.' {
             literal.push(self.current_char);
             self.read_char();
 
