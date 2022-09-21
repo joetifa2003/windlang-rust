@@ -1,11 +1,10 @@
+use clap::{Parser, Subcommand};
+use mimalloc::MiMalloc;
 use std::{
     error::Error,
     fs::{self},
     process,
 };
-
-use clap::{Parser, Subcommand};
-use mimalloc::MiMalloc;
 use windlang_rust::{compiler::Compiler, lexer::Lexer, parser, vm::VM};
 
 #[global_allocator]
@@ -40,10 +39,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             let mut compiler = Compiler::new();
             let opcode = value_or_exit(compiler.compile_stmts(ast));
-            for op in &opcode {
-                println!("{}", op);
-            }
-            println!("========================");
+            // for op in &opcode {
+            //     println!("{}", op);
+            // }
+            // println!("========================");
 
             let mut vm = VM::new(opcode);
             value_or_exit(vm.interpret());

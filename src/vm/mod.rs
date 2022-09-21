@@ -51,14 +51,8 @@ macro_rules! number_op_bool {
     }};
 }
 
-const STACK_SIZE: usize = 512;
-
-pub struct Environment {
-    store: Vec<Value>,
-}
-
 pub struct EnvironmentStack {
-    stack: Vec<Environment>,
+    stack: Vec<Vec<Value>>,
 }
 
 impl EnvironmentStack {
@@ -68,9 +62,7 @@ impl EnvironmentStack {
 
     #[inline(always)]
     fn begin_environment(&mut self, var_count: usize) {
-        self.stack.push(Environment {
-            store: vec![Value::Nil; var_count],
-        })
+        self.stack.push(vec![Value::Nil; var_count])
     }
 
     #[inline(always)]
@@ -79,14 +71,14 @@ impl EnvironmentStack {
     }
 
     #[inline(always)]
-    fn current_env_mut(&mut self) -> &mut Environment {
+    fn current_env_mut(&mut self) -> &mut Vec<Value> {
         self.stack.last_mut().unwrap()
     }
 
     #[inline(always)]
     fn define(&mut self, index: usize, value: Value) {
         let env = self.current_env_mut();
-        env.store[index] = value;
+        env[index] = value;
     }
 
     #[inline(always)]
@@ -96,13 +88,13 @@ impl EnvironmentStack {
 
     #[inline(always)]
     fn get(&self, scope_index: i32, index: usize) -> Value {
-        self.stack[self.index_from_relative(scope_index)].store[index].clone()
+        self.stack[self.index_from_relative(scope_index)][index].clone()
     }
 
     #[inline(always)]
     fn set(&mut self, scope_index: i32, index: usize, value: Value) {
         let scope_index = self.index_from_relative(scope_index);
-        self.stack[scope_index].store[index] = value
+        self.stack[scope_index][index] = value
     }
 }
 
@@ -132,7 +124,7 @@ pub struct VM {
 impl VM {
     pub fn new(instructions: Vec<Opcode>) -> VM {
         Self {
-            stack: Vec::with_capacity(STACK_SIZE),
+            stack: vec![],
             env_stack: EnvironmentStack::new(),
             frames: vec![Frame::new(instructions)],
         }
@@ -184,7 +176,7 @@ impl VM {
 
     #[inline(always)]
     fn current_frame(&self) -> &Frame {
-        self.frames.last().unwrap()
+        unsafe { self.frames.get_unchecked(self.frames.len() - 1) }
     }
 
     #[inline(always)]
@@ -214,7 +206,19 @@ impl VM {
             let instruction = self.current_frame_instruction();
             match instruction {
                 Opcode::Const(val) => self.push(val),
-                Opcode::Add => number_op!(self, +),
+                Opcode::Add => {
+                    let left = self.pop();
+                    let right = self.pop();
+
+                    self.push(match (&left, &right) {
+                        (Value::Int(lv), Value::Int(rv)) => Value::Int(*lv + *rv),
+                        (Value::Int(lv), Value::Float(rv)) => Value::Float(*lv as f32 + *rv),
+                        (Value::Float(lv), Value::Int(rv)) => Value::Float(*lv + *rv as f32),
+                        (Value::Float(lv), Value::Float(rv)) => Value::Float(*lv + *rv),
+                        (Value::String(lv), Value::String(rv)) => Value::String(lv.clone() + rv),
+                        _ => binary_op_error!((&left) + (&right)),
+                    })
+                }
                 Opcode::Sub => number_op!(self, -),
                 Opcode::Mul => number_op!(self, *),
                 Opcode::Div => number_op!(self, /),
@@ -374,15 +378,55 @@ impl VM {
                     self.push(Value::Nil);
                 }
                 Opcode::GetGlobal { index } => {
-                    let val = self.env_stack.stack[0].store[index].clone();
+                    let val = self.env_stack.stack[0][index].clone();
 
                     self.push(val);
                 }
                 Opcode::SetGlobal { index } => {
                     let value = self.stack_top();
 
-                    self.env_stack.stack[0].store[index] = value.clone();
+                    self.env_stack.stack[0][index] = value.clone();
                 }
+                Opcode::Index => {
+                    let value = self.pop();
+                    let index = self.pop();
+                    match value {
+                        Value::Array(arr) => match index {
+                            Value::Int(index) => {
+                                let val = arr.borrow().get(index as usize).unwrap().clone();
+                                self.push(val);
+                            }
+                            _ => panic!(),
+                        },
+                        _ => panic!(),
+                    }
+                }
+                Opcode::Continue => {
+                    let mut current_instruction = self.current_frame_instruction();
+                    let mut new_blocks = 0;
+                    while !matches!(current_instruction, Opcode::LoopUpdate) {
+                        // Sync env_stack
+                        match current_instruction {
+                            Opcode::Block(_) => {
+                                new_blocks += 1;
+                            }
+                            Opcode::EndBlock => {
+                                if new_blocks == 0 {
+                                    self.end_environment()
+                                } else {
+                                    new_blocks -= 1;
+                                }
+                            }
+                            _ => {}
+                        }
+                        self.current_frame_mut().ip += 1;
+                        current_instruction = self.current_frame_instruction();
+                    }
+                }
+                // Labels
+                Opcode::LoopStart => {}
+                Opcode::LoopUpdate => {}
+                Opcode::LoopEnd => {}
             }
 
             self.current_frame_mut().ip += 1;

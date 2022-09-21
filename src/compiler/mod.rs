@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, time::Duration};
 
 use crate::{
     error::wind_error,
@@ -70,6 +70,13 @@ impl Compiler {
                 };
 
                 Value::Array(Rc::new(RefCell::new(Vec::with_capacity(n_of_elements as usize))))
+            }, 1;
+            "sleep" => |args| {
+                let dur = args[0].as_int().unwrap();
+
+                std::thread::sleep(Duration::from_millis(*dur as u64));
+
+                Value::Nil
             }, 1
         );
 
@@ -365,17 +372,34 @@ impl Compiler {
                 let body_len = body_instructions.len() as i32;
                 let increment_len = increment_instructions.len() as i32;
 
+                instructions.push(Opcode::LoopStart);
                 instructions.push(Opcode::Block(scope.len()));
                 instructions.append(&mut initializer_instructions);
                 instructions.append(&mut condition_instructions);
-                instructions.push(Opcode::JmpFalse(body_len + increment_len + 2));
+                instructions.push(Opcode::JmpFalse(body_len + increment_len + 3));
                 instructions.append(&mut body_instructions);
+                instructions.push(Opcode::LoopUpdate);
                 instructions.append(&mut increment_instructions);
-                instructions.push(Opcode::Jmp(-increment_len - body_len - condition_len - 1));
+                instructions.push(Opcode::Jmp(-increment_len - body_len - condition_len - 2));
                 instructions.push(Opcode::EndBlock);
+                instructions.push(Opcode::LoopEnd);
 
                 Ok(instructions)
             }
+            AstNodeType::Index { left, index } => {
+                let mut instructions = vec![];
+
+                let mut value_instructions = self.compile(*left)?;
+                let mut index_instructions = self.compile(*index)?;
+
+                instructions.append(&mut index_instructions);
+                instructions.append(&mut value_instructions);
+                instructions.push(Opcode::Index);
+
+                Ok(instructions)
+            }
+            AstNodeType::Continue => Ok(vec![Opcode::Continue]),
+            AstNodeType::Break => todo!(),
         }
     }
 }

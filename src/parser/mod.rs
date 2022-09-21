@@ -95,6 +95,13 @@ impl Parser {
             TokenType::If => self.parse_if_stmt(),
             TokenType::Echo => self.parse_echo_stmt(),
             TokenType::For => self.parse_for_stmt(),
+            TokenType::Continue => {
+                let line = self.current_token().line;
+                self.next_token(); // continue
+                self.expect_current(TokenType::SemiColon)?;
+
+                Ok(Box::new(AstNode::new(AstNodeType::Continue, line)))
+            }
             _ => self.parse_expression_statement(),
         }
     }
@@ -326,14 +333,15 @@ impl Parser {
 
         parser.next_token(); // (
         if !parser.current_token_is(TokenType::RParen) {
-            while parser.peek_token_is(TokenType::Comma) {
+            loop {
                 let arg = parser.parse_expression(Precedence::Lowest)?;
                 args.push(*arg);
-                parser.next_token(); // ,
+                if parser.current_token_is(TokenType::Comma) {
+                    parser.next_token();
+                } else {
+                    break;
+                }
             }
-
-            let last_param = parser.parse_expression(Precedence::Lowest)?;
-            args.push(*last_param);
         }
         parser.expect_current(TokenType::RParen)?;
 
@@ -341,6 +349,18 @@ impl Parser {
             line,
             node_type: AstNodeType::Call { func: left, args },
         }))
+    }
+
+    fn parse_index(parser: &mut Parser, left: Box<AstNode>) -> Result<Box<AstNode>, ParseError> {
+        let line = parser.current_token().line;
+        parser.expect_current(TokenType::LBracket)?;
+        let index = parser.parse_expression(Precedence::Lowest)?;
+        parser.expect_current(TokenType::RBracket)?;
+
+        Ok(Box::new(AstNode::new(
+            AstNodeType::Index { left, index },
+            line,
+        )))
     }
 
     fn parse_if_stmt(&mut self) -> Result<Box<AstNode>, ParseError> {
@@ -492,6 +512,7 @@ impl Parser {
 
             TokenType::Assign => Some(Box::new(Parser::parse_assign)),
             TokenType::LParen => Some(Box::new(Parser::parse_call)),
+            TokenType::LBracket => Some(Box::new(Parser::parse_index)),
 
             _ => None,
         }
@@ -516,7 +537,7 @@ impl Parser {
             TokenType::PlusPlus | TokenType::MinusMinus => Ok(Precedence::Postfix),
             TokenType::And => Ok(Precedence::And),
             TokenType::Or => Ok(Precedence::Or),
-            TokenType::LParen | TokenType::Dot => Ok(Precedence::Highest),
+            TokenType::LParen | TokenType::Dot | TokenType::LBracket => Ok(Precedence::Highest),
 
             _ => Ok(Precedence::Lowest),
         }

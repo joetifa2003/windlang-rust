@@ -1,0 +1,85 @@
+let seperator = "=============";
+let sleepTime = 250;
+
+let printBoard = fn(cells) {
+    echo seperator;
+    for (let y = 0; y < len(cells); y = y + 1) {
+        let row = "";
+        for (let x = 0; x < len(cells); x = x + 1) {
+            if (cells[y][x] == 0) {
+                row = row + " "
+            } else {
+                row = row + "#"
+            }
+        }
+        echo row;
+    }
+    echo seperator;
+};
+
+let cells = [
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+];
+printBoard(cells);
+
+
+while(true) {
+    let newCells = [];
+    for (let y = 0; y < len(cells); y = y + 1) {
+        push(newCells, []);
+        for (let x = 0; x < len(cells[y]); x = x + 1) {
+            let cell = cells[y][x];
+            
+            let neghibors = 0;
+            for (let nx = -1; nx <= 1; nx = nx + 1) {
+                for (let ny = -1; ny <= 1; ny = ny + 1) {
+                    if (nx == 0 && ny == 0) {
+                        continue;
+                    }
+
+                    let cordsY = y + ny;
+                    let cordsX = x + nx;
+                    if (cordsY < 0) {
+                        cordsY = cordsY + len(cells);
+                    }
+                    if (cordsX < 0) {
+                        cordsX = cordsX + len(cells);
+                    }
+                    if (cordsY >= len(cells)) {
+                        cordsY = cordsY - len(cells);
+                    }
+                    if (cordsX >= len(cells)) {
+                        cordsX = cordsX - len(cells);
+                    } 
+
+                    neghibors = neghibors + cells[cordsY][cordsX];
+                }
+            }
+
+            if (cell == 1) {
+                // alive
+                if (neghibors < 2 || neghibors > 3) {
+                    push(newCells[y], 0);
+                } else {
+                    push(newCells[y], 1);
+                }
+            } else {
+                // dead
+                if (neghibors == 3) {
+                    push(newCells[y], 1);
+                } else {
+                    push(newCells[y], 0);
+                }
+            }
+        }
+    }
+
+    cells = newCells;
+    printBoard(cells);
+    sleep(sleepTime);
+}

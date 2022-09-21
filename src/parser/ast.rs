@@ -47,6 +47,8 @@ pub enum AstNodeType {
         body: Box<AstNode>,
         increment: Box<AstNode>,
     },
+    Continue,
+    Break,
 
     // Expressions
     IntegerExpr {
@@ -95,6 +97,10 @@ pub enum AstNodeType {
     Call {
         func: Box<AstNode>,
         args: Vec<AstNode>,
+    },
+    Index {
+        left: Box<AstNode>,
+        index: Box<AstNode>,
     },
 }
 

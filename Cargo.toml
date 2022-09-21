@@ -7,7 +7,7 @@ default-run = "wind"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [profile.release]
-strip = true
+# strip = true
 lto = true
 codegen-units = 1
 panic = "abort"

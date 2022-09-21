@@ -223,6 +223,8 @@ impl Lexer {
             self.read_char();
         }
 
+        literal = literal.replace("\\r", "\r");
+
         self.read_char(); // "
 
         Token::new(TokenType::String, literal, self.line)

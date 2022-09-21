@@ -36,6 +36,11 @@ pub enum Opcode {
     Echo,
     Call(usize),
     Ret,
+    Index,
+    LoopStart,
+    LoopEnd,
+    LoopUpdate,
+    Continue,
 }
 
 impl Display for Opcode {
@@ -57,15 +62,15 @@ impl Display for Opcode {
                 Opcode::Mul => "mul".into(),
                 Opcode::Pop => "pop".into(),
                 Opcode::EndBlock => "endblock".into(),
-                Opcode::LtEq => "lt".into(),
-                Opcode::Mod => "lteq".into(),
+                Opcode::LtEq => "lteq".into(),
+                Opcode::Mod => "mod".into(),
                 Opcode::Eq => "eq".into(),
                 Opcode::Negate => "neg".into(),
                 Opcode::Bang => "bang".into(),
                 Opcode::Div => "div".into(),
-                Opcode::Lt => "<".into(),
-                Opcode::GtEq => ">=".into(),
-                Opcode::Gt => ">".into(),
+                Opcode::Lt => "lt".into(),
+                Opcode::GtEq => "gteq".into(),
+                Opcode::Gt => "gt".into(),
                 Opcode::And => "and".into(),
                 Opcode::Or => "or".into(),
                 Opcode::NotEq => "neq".into(),
@@ -76,6 +81,11 @@ impl Display for Opcode {
                 Opcode::FnEnd => "fnend".into(),
                 Opcode::GetGlobal { index } => format!("getglobal {}", index),
                 Opcode::SetGlobal { index } => format!("setglobal {}", index),
+                Opcode::Index => "idx".into(),
+                Opcode::LoopStart => "loop".into(),
+                Opcode::LoopEnd => "endloop".into(),
+                Opcode::LoopUpdate => "loopupdate".into(),
+                Opcode::Continue => "cont".into(),
             }
         )
     }
