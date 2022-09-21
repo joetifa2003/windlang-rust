@@ -98,35 +98,16 @@ impl EnvironmentStack {
     }
 }
 
-pub struct Frame {
-    instructions: Vec<Opcode>,
-    ip: i32,
-    num_of_blocks: i32,
-}
-
-impl Frame {
-    #[inline(always)]
-    fn new(instructions: Vec<Opcode>) -> Frame {
-        Frame {
-            instructions,
-            ip: 0,
-            num_of_blocks: 0,
-        }
-    }
-}
-
 pub struct VM {
     pub stack: Vec<Value>,
     env_stack: EnvironmentStack,
-    frames: Vec<Frame>,
 }
 
 impl VM {
-    pub fn new(instructions: Vec<Opcode>) -> VM {
+    pub fn new() -> VM {
         Self {
             stack: vec![],
             env_stack: EnvironmentStack::new(),
-            frames: vec![Frame::new(instructions)],
         }
     }
 
@@ -154,13 +135,11 @@ impl VM {
 
     #[inline(always)]
     fn begin_environment(&mut self, var_count: usize) {
-        self.current_frame_mut().num_of_blocks += 1;
         self.env_stack.begin_environment(var_count)
     }
 
     #[inline(always)]
     fn end_environment(&mut self) {
-        self.current_frame_mut().num_of_blocks -= 1;
         self.env_stack.end_environment()
     }
 
@@ -174,38 +153,13 @@ impl VM {
         self.env_stack.set(scope_index, index, value)
     }
 
-    #[inline(always)]
-    fn current_frame(&self) -> &Frame {
-        unsafe { self.frames.get_unchecked(self.frames.len() - 1) }
-    }
-
-    #[inline(always)]
-    fn current_frame_mut(&mut self) -> &mut Frame {
-        self.frames.last_mut().unwrap()
-    }
-
-    #[inline(always)]
-    fn current_frame_instruction(&self) -> Opcode {
-        let curr_frame = self.current_frame();
-
-        curr_frame.instructions[curr_frame.ip as usize].clone()
-    }
-
-    #[inline(always)]
-    fn push_frame(&mut self, instructions: Vec<Opcode>) {
-        self.frames.push(Frame::new(instructions));
-    }
-
-    #[inline(always)]
-    fn pop_frame(&mut self) {
-        self.frames.pop();
-    }
-
-    pub fn interpret(&mut self) -> Result<(), RuntimeError> {
-        while self.current_frame().ip < self.current_frame().instructions.len() as i32 {
-            let instruction = self.current_frame_instruction();
+    pub fn interpret(&mut self, instructions: Vec<Opcode>) -> Result<Value, RuntimeError> {
+        let mut ip = 0;
+        let mut num_of_blocks = 0;
+        while ip < instructions.len() as i32 {
+            let instruction = instructions.get(ip as usize).unwrap();
             match instruction {
-                Opcode::Const(val) => self.push(val),
+                Opcode::Const(val) => self.push(val.clone()),
                 Opcode::Add => {
                     let left = self.pop();
                     let right = self.pop();
@@ -240,14 +194,14 @@ impl VM {
                     self.push(Value::Bool(!is_equal(left, right)))
                 }
                 Opcode::Jmp(offset) => {
-                    self.current_frame_mut().ip += offset;
+                    ip += offset;
                     continue;
                 }
                 Opcode::JmpFalse(offset) => {
                     let operand = self.pop();
 
                     if !is_truthy(operand) {
-                        self.current_frame_mut().ip += offset;
+                        ip += offset;
                         continue;
                     }
                 }
@@ -255,21 +209,23 @@ impl VM {
                     self.pop();
                 }
                 Opcode::Block(var_count) => {
-                    self.begin_environment(var_count);
+                    num_of_blocks += 1;
+                    self.begin_environment(*var_count);
                 }
                 Opcode::EndBlock => {
+                    num_of_blocks -= 1;
                     self.end_environment();
                 }
                 Opcode::Let(index) => {
                     let value = self.pop();
 
-                    self.define(index, value);
+                    self.define(*index, value);
                 }
                 Opcode::Get {
                     scope_index: scope,
                     index,
                 } => {
-                    let val = self.get(scope, index);
+                    let val = self.get(*scope, *index);
 
                     self.push(val);
                 }
@@ -279,12 +235,12 @@ impl VM {
                 } => {
                     let value = self.stack_top();
 
-                    self.set(scope, index, value.clone());
+                    self.set(*scope, *index, value.clone());
                 }
                 Opcode::Array(size) => {
                     let mut values = vec![];
 
-                    for _ in 0..size {
+                    for _ in 0..(*size) {
                         values.push(self.pop());
                     }
 
@@ -332,15 +288,15 @@ impl VM {
 
                     match operand {
                         Value::Fn(instructions, param_count) => {
-                            if arg_count != param_count {
+                            if (*arg_count) != param_count {
                                 panic!()
                             }
 
-                            self.push_frame(instructions);
-                            continue;
+                            let value = self.interpret(instructions)?;
+                            self.push(value);
                         }
                         Value::BuiltInFn(f, param_count) => {
-                            if arg_count != param_count {
+                            if (*arg_count) != param_count {
                                 panic!()
                             }
 
@@ -357,35 +313,34 @@ impl VM {
                 Opcode::Ret => {
                     let operand = self.pop();
 
-                    for _ in 0..self.current_frame().num_of_blocks {
+                    for _ in 0..num_of_blocks {
                         self.end_environment();
                     }
 
-                    self.pop_frame();
-                    self.push(operand);
+                    return Ok(operand);
                 }
                 Opcode::FnStart(param_count) => {
-                    self.begin_environment(param_count);
+                    num_of_blocks += 1;
+                    self.begin_environment(*param_count);
 
-                    for i in 0..param_count {
+                    for i in 0..(*param_count) {
                         let arg = self.pop();
                         self.define(i, arg);
                     }
                 }
                 Opcode::FnEnd => {
+                    num_of_blocks -= 1;
                     self.end_environment();
-                    self.pop_frame();
-                    self.push(Value::Nil);
                 }
                 Opcode::GetGlobal { index } => {
-                    let val = self.env_stack.stack[0][index].clone();
+                    let val = self.env_stack.stack[0][*index].clone();
 
                     self.push(val);
                 }
                 Opcode::SetGlobal { index } => {
                     let value = self.stack_top();
 
-                    self.env_stack.stack[0][index] = value.clone();
+                    self.env_stack.stack[0][*index] = value.clone();
                 }
                 Opcode::Index => {
                     let value = self.pop();
@@ -402,7 +357,7 @@ impl VM {
                     }
                 }
                 Opcode::Continue => {
-                    let mut current_instruction = self.current_frame_instruction();
+                    let mut current_instruction = instruction;
                     let mut new_blocks = 0;
                     while !matches!(current_instruction, Opcode::LoopUpdate) {
                         // Sync env_stack
@@ -419,8 +374,8 @@ impl VM {
                             }
                             _ => {}
                         }
-                        self.current_frame_mut().ip += 1;
-                        current_instruction = self.current_frame_instruction();
+                        ip += 1;
+                        current_instruction = instructions.get(ip as usize).unwrap();
                     }
                 }
                 // Labels
@@ -429,10 +384,10 @@ impl VM {
                 Opcode::LoopEnd => {}
             }
 
-            self.current_frame_mut().ip += 1;
+            ip += 1;
         }
 
-        Ok(())
+        Ok(Value::Nil)
     }
 }
 

@@ -13,7 +13,7 @@ codegen-units = 1
 panic = "abort"
 opt-level = 3
 overflow-checks = false
-# debug = 1
+debug = 1
 
 [profile.dev]
 opt-level = 0
